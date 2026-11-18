@@ -99,7 +99,7 @@ export class PassiveModule extends BaseModule {
 
             // Получаем инстанс карты/корабля (ShipStatus.Instance)
             const instance = this.ShipStatus.field("Instance").value;
-            if (instance && !instance.isNull()) {
+            if (instance && !(instance as Il2Cpp.Object).isNull()) {
                 // Пример вызова закрытия дверей (зависит от конкретной версии декомпилированного кода)
                 // Часто это метод вроде RpcCloseDoorsOfType или перебор зон
                 Logger.debug(`[${this.name}] Executing Close All Doors...`);
@@ -124,7 +124,7 @@ export class PassiveModule extends BaseModule {
 
             // Находим локального игрока (LocalPlayer)
             const localPlayer = this.PlayerControl.field("LocalPlayer").value;
-            if (!localPlayer || localPlayer.isNull()) {
+            if (!localPlayer || (localPlayer as Il2Cpp.Object).isNull()) {
                 Logger.debug(`[${this.name}] LocalPlayer not found yet (are you in a game?).`);
                 return;
             }
