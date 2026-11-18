@@ -76,7 +76,7 @@ Before you download anything, make sure your platform is supported:
 - ❓ Custom / OEM ROMs (may or may not work)
 - ❌ Emulators (`frida-java-bridge`, which is required for the menu, doesn't work on them)
 
-Download and install the .apk from [releases](https://github.comhlebnikovaleksej70-art/MalumMenu-Android/releases/latest).
+Download and install the .apk from [releases](https://github.com/hlebnikovaleksej70-art/MalumMenu-Android/releases/latest).
 
 Release notes can be found below each [release](../../releases) and in [CHANGELOG.md](/docs/CHANGELOG.md).
 
