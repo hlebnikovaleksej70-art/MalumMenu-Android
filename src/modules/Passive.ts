@@ -9,7 +9,6 @@ export class PassiveModule extends BaseModule {
     private Screen!: Il2Cpp.Class;
     private ResolutionManager!: Il2Cpp.Class;
     private PlayerControl!: Il2Cpp.Class;
-    private RoleBehaviour!: Il2Cpp.Class;
 
     // Methods
     private ResolutionManager_SetResolution!: Il2Cpp.Method;
@@ -17,26 +16,21 @@ export class PassiveModule extends BaseModule {
     private PlayerControl_FixedUpdate!: Il2Cpp.Method;
 
     // Resolution state
-    private HasResolutionBeenChanged!: boolean;
-    private OriginalWidth!: number;
-    private OriginalHeight!: number;
+    private HasResolutionBeenChanged: boolean = false;
+    private OriginalWidth: number = 0;
+    private OriginalHeight: number = 0;
 
-    // Werewolf & Cooldown state
+    // Werewolf & Cooldown state (без ограничений)
     public isWerewolfPassiveEnabled: boolean = false;
     public useCustomCooldown: boolean = false;
     public customKillCooldown: number = 0;
 
     public init(): void {
-        // Инициализация классов разрешения экрана
         this.Screen = AssemblyHelper.CoreModule.class("UnityEngine.Screen");
         this.ResolutionManager = AssemblyHelper.AssemblyCSharp.class("ResolutionManager");
         this.ResolutionManager_SetResolution = this.ResolutionManager.method<void>("SetResolution", 3);
-        this.HasResolutionBeenChanged = false;
 
-        // Инициализация классов игрока и ролей
         this.PlayerControl = AssemblyHelper.AssemblyCSharp.class("PlayerControl");
-        this.RoleBehaviour = AssemblyHelper.AssemblyCSharp.class("RoleBehaviour");
-        
         this.PlayerControl_SetKillTimer = this.PlayerControl.method<void>("SetKillTimer", 1);
         this.PlayerControl_FixedUpdate = this.PlayerControl.method<void>("FixedUpdate");
 
@@ -46,86 +40,89 @@ export class PassiveModule extends BaseModule {
     private setupHooks(): void {
         const module = this;
 
-        // 1. Хук на SetKillTimer: снимает любые ограничения и подставляет заданное число секунд
+        // Перехват SetKillTimer: подменяем КД на заданное число секунд без ограничений
         this.PlayerControl_SetKillTimer.implementation = function (time: number): void {
-            if (module.useCustomCooldown) {
-                return module.PlayerControl_SetKillTimer.invoke.call(this, module.customKillCooldown);
-            }
-            return module.PlayerControl_SetKillTimer.invoke.call(this, time);
+            const targetTime = module.useCustomCooldown ? module.customKillCooldown : time;
+            this.method<void>("SetKillTimer", 1).invoke(targetTime);
         };
 
-        // 2. Хук на FixedUpdate: поддержание пассивной способности оборотня в каждом кадре
+        // Поддержание пассивных свойств в FixedUpdate
         this.PlayerControl_FixedUpdate.implementation = function (): void {
-            module.PlayerControl_FixedUpdate.invoke.call(this);
+            this.method<void>("FixedUpdate").invoke();
 
             if (!module.isWerewolfPassiveEnabled) return;
 
             try {
-                const localPlayer = module.PlayerControl.field<Il2Cpp.Object>("LocalPlayer").value;
-                // Применяем пассивку только к локальному игроку
-                if (localPlayer && !localPlayer.isNull() && this.handle.equals(localPlayer.handle)) {
-                    const data = localPlayer.method<Il2Cpp.Object>("get_Data").invoke();
-                    if (data && !data.isNull()) {
-                        const role = data.field<Il2Cpp.Object>("Role").value;
-                        if (role && !role.isNull()) {
-                            // Включаем возможность использовать вентиляцию (люки) и обзор предателя
-                            // (базовые пассивные механики ролей типа Оборотня / Shapeshifter / Werewolf в модах)
-                            role.field<boolean>("CanVent").value = true;
-                            role.field<boolean>("AffectedByLightAffectors").value = false;
-                        }
-                    }
+                const localPlayerField = module.PlayerControl.tryField<Il2Cpp.Object>("LocalPlayer");
+                const localPlayer = localPlayerField?.value;
+
+                if (!localPlayer || localPlayer.isNull() || !this.handle.equals(localPlayer.handle)) {
+                    return;
                 }
-            } catch (e) {
-                // Игнорируем ошибки до полной загрузки сцены матча
+
+                const data = localPlayer.method<Il2Cpp.Object>("get_Data").invoke();
+                if (!data || data.isNull()) return;
+
+                const role = data.method<Il2Cpp.Object>("get_Role").invoke();
+                if (!role || role.isNull()) return;
+
+                const canVentField = role.tryField<boolean>("CanVent");
+                if (canVentField) {
+                    canVentField.value = true;
+                }
+            } catch {
+                // Игнорируем до появления игрока в матче
             }
         };
     }
 
-    // Оригинальный метод изменения разрешения
     public toggleFullResolution(state: boolean): void {
-        const module = this;
-
         if (!this.HasResolutionBeenChanged) {
-            const original_resolution = module.Screen.method<Il2Cpp.Object>("get_currentResolution").invoke();
-            module.OriginalWidth = original_resolution.method<number>("get_width").invoke();
-            module.OriginalHeight = original_resolution.method<number>("get_height").invoke();
-            Logger.debug(`[${module.name}::ToggleFullResolution] Original resolution: ${module.OriginalWidth}x${module.OriginalHeight}`);
+            const currentResolution = this.Screen.method<Il2Cpp.Object>("get_currentResolution").invoke();
+            this.OriginalWidth = currentResolution.method<number>("get_width").invoke();
+            this.OriginalHeight = currentResolution.method<number>("get_height").invoke();
+            this.HasResolutionBeenChanged = true;
+            Logger.debug(`[${this.name}::ToggleFullResolution] Original resolution: ${this.OriginalWidth}x${this.OriginalHeight}`);
         }
-        this.HasResolutionBeenChanged = true;
 
         if (state) {
-            const resolutions = module.Screen.method<Il2Cpp.Array<Il2Cpp.Object>>("get_resolutions").invoke();
-            const width = resolutions.get(0).method<number>("get_width").invoke();
-            const height = resolutions.get(0).method<number>("get_height").invoke();
-            Logger.debug(`[${module.name}::ToggleFullResolution] Setting resolution to ${height}x${width}`);
-            module.ResolutionManager_SetResolution.invoke(height, width, true);
+            const resolutions = this.Screen.method<Il2Cpp.Array<Il2Cpp.Object>>("get_resolutions").invoke();
+            const firstRes = resolutions.get(0);
+            const width = firstRes.method<number>("get_width").invoke();
+            const height = firstRes.method<number>("get_height").invoke();
+            Logger.debug(`[${this.name}::ToggleFullResolution] Setting resolution to ${height}x${width}`);
+            this.ResolutionManager_SetResolution.invoke(height, width, true);
         } else {
-            Logger.debug(`[${module.name}::ToggleFullResolution] Resetting resolution to ${module.OriginalWidth!}x${module.OriginalHeight!}`);
-            module.ResolutionManager_SetResolution.invoke(module.OriginalWidth, module.OriginalHeight, true);
+            Logger.debug(`[${this.name}::ToggleFullResolution] Resetting resolution to ${this.OriginalWidth}x${this.OriginalHeight}`);
+            this.ResolutionManager_SetResolution.invoke(this.OriginalWidth, this.OriginalHeight, true);
         }
     }
 
-    // Включение/выключение пассивки оборотня
-    public toggleWerewolfPassive(state: boolean): void {
-        this.isWerewolfPassiveEnabled = state;
-        Logger.debug(`[${this.name}::WerewolfPassive] State set to: ${state}`);
+    public toggleWerewolfPassive(state?: boolean): boolean {
+        this.isWerewolfPassiveEnabled = state !== undefined ? state : !this.isWerewolfPassiveEnabled;
+        Logger.debug(`[${this.name}::WerewolfPassive] Enabled: ${this.isWerewolfPassiveEnabled}`);
+        return this.isWerewolfPassiveEnabled;
     }
 
-    // Установка кастомного времени КД убийства (без ограничений)
-    public setCustomKillCooldown(seconds: number, enabled: boolean = true): void {
+    public setKillCooldownSeconds(seconds: number, enabled: boolean = true): void {
         this.customKillCooldown = seconds;
         this.useCustomCooldown = enabled;
+        Logger.debug(`[${this.name}::KillCooldown] Seconds: ${seconds}, Enabled: ${enabled}`);
 
-        Logger.debug(`[${this.name}::KillCooldown] Set to ${seconds}s (Enabled: ${enabled})`);
+        if (!enabled) return;
 
         try {
-            const localPlayer = this.PlayerControl.field<Il2Cpp.Object>("LocalPlayer").value;
-            if (localPlayer && !localPlayer.isNull() && enabled) {
-                // Мгновенно обновляем текущий таймер убийства на экране
+            const localPlayer = this.PlayerControl.tryField<Il2Cpp.Object>("LocalPlayer")?.value;
+            if (localPlayer && !localPlayer.isNull()) {
                 localPlayer.method<void>("SetKillTimer", 1).invoke(this.customKillCooldown);
             }
-        } catch (e) {
-            Logger.debug(`[${this.name}::KillCooldown] LocalPlayer not ready yet.`);
+        } catch {
+            // Игрок ещё не создан
         }
+    }
+
+    public resetKillCooldown(): void {
+        this.useCustomCooldown = false;
+        Logger.debug(`[${this.name}::KillCooldown] Reset to default`);
     }
 }
