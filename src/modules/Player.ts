@@ -58,8 +58,8 @@ export class PlayerModule extends BaseModule {
 
         this.PlayerPhysics_LateUpdate.implementation = function (): void {
             const localPlayer = module.localPlayer;
-
             let cachedPtr: Il2Cpp.Pointer;
+
             try {
                 cachedPtr = UnityUtils.cachedPtr(localPlayer);
             } catch (e) {
@@ -106,6 +106,7 @@ export class PlayerModule extends BaseModule {
 
             const data = localPlayer.method<Il2Cpp.Object>("get_Data").invoke();
             let canVent: boolean;
+
             try {
                 const role = data.field<Il2Cpp.Object>("Role").value;
                 canVent = role.field<boolean>("CanVent").value;
@@ -119,8 +120,8 @@ export class PlayerModule extends BaseModule {
             const inMeeting = !MeetingHudInstance.isNull();
             const ShipStatusInstance = module.ShipStatus.field<Il2Cpp.Object>("Instance").value;
             const inGame = !ShipStatusInstance.isNull();
-
             const shouldShowChatButton = State.enableChat || inMeeting || !inGame || isDead;
+
             const chat = this.field<Il2Cpp.Object>("Chat").value;
             const chatGameObject = UnityUtils.getGameObject(chat);
             chatGameObject.method<void>("SetActive").invoke(shouldShowChatButton);
@@ -139,9 +140,7 @@ export class PlayerModule extends BaseModule {
                 impostorVentButtonGameObject.method<void>("SetActive", 1).invoke(State.unlockVents);
             }
 
-            // Отдаление / приближение камеры (стандартный размер в Among Us = 3)
             module.updateCameraZoom();
-
             return this.method<void>("Update").invoke();
         };
 
@@ -195,7 +194,6 @@ export class PlayerModule extends BaseModule {
 
             canUse.value = num <= usableDistance && !module.PhysicsHelpers_AnythingBetween.invoke(collider, centerVector2, positionVector2, shipOnlyMask, false);
             couldUse.value = true;
-
             return num;
         };
     }
@@ -212,7 +210,8 @@ export class PlayerModule extends BaseModule {
                 return;
             }
 
-            const targetSize = State.zoomOut ? State.zoomLevel : 3;
+            const stateAny = State as unknown as { zoomOut?: boolean; zoomLevel?: number };
+            const targetSize = stateAny.zoomOut && typeof stateAny.zoomLevel === "number" ? stateAny.zoomLevel : 3;
             mainCamera.method<void>("set_orthographicSize").invoke(targetSize);
         } catch (e) {
             Logger.debug(`[${this.name}::updateCameraZoom] ${e}`);
