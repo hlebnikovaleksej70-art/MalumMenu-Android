@@ -21,7 +21,7 @@ export class PlayerModule extends BaseModule {
     private Vent!: Il2Cpp.Class;
 
     private Vector2_Distance!: Il2Cpp.Method;
-    private Camera_get_main!: Il2Cpp.Method;
+    private Camera_get_main!: Il2Cpp.Method<Il2Cpp.Object>;
     private HudManager_Update!: Il2Cpp.Method;
     private MatchInfoHudButton_Update!: Il2Cpp.Method;
     private PhysicsHelpers_AnythingBetween!: Il2Cpp.Method;
@@ -91,10 +91,14 @@ export class PlayerModule extends BaseModule {
         };
 
         // @ts-ignore
-        this.PlayerPurchasesData_GetPurchase.implementation = function (itemKey: Il2Cpp.String, bundleKey: Il2Cpp.String): boolean {
+        this.PlayerPurchasesData_GetPurchase.implementation = function (
+            itemKey: Il2Cpp.String,
+            bundleKey: Il2Cpp.String
+        ): boolean {
             if (State.unlockCosmetics) {
                 return true;
             }
+
             return this.method<boolean>("GetPurchase", 2).invoke(itemKey, bundleKey);
         };
 
@@ -116,12 +120,14 @@ export class PlayerModule extends BaseModule {
             }
 
             const isDead = data.field<boolean>("IsDead").value;
+
             const MeetingHudInstance = module.MeetingHud.field<Il2Cpp.Object>("Instance").value;
             const inMeeting = !MeetingHudInstance.isNull();
+
             const ShipStatusInstance = module.ShipStatus.field<Il2Cpp.Object>("Instance").value;
             const inGame = !ShipStatusInstance.isNull();
-            const shouldShowChatButton = State.enableChat || inMeeting || !inGame || isDead;
 
+            const shouldShowChatButton = State.enableChat || inMeeting || !inGame || isDead;
             const chat = this.field<Il2Cpp.Object>("Chat").value;
             const chatGameObject = UnityUtils.getGameObject(chat);
             chatGameObject.method<void>("SetActive").invoke(shouldShowChatButton);
@@ -141,6 +147,7 @@ export class PlayerModule extends BaseModule {
             }
 
             module.updateCameraZoom();
+
             return this.method<void>("Update").invoke();
         };
 
@@ -155,7 +162,11 @@ export class PlayerModule extends BaseModule {
         };
 
         // @ts-ignore
-        this.Vent_CanUse.implementation = function (pc: Il2Cpp.Object, canUse: Il2Cpp.Reference<boolean>, couldUse: Il2Cpp.Reference<boolean>): number {
+        this.Vent_CanUse.implementation = function (
+            pc: Il2Cpp.Object,
+            canUse: Il2Cpp.Reference<boolean>,
+            couldUse: Il2Cpp.Reference<boolean>
+        ): number {
             if (!State.unlockVents) {
                 return this.method<number>("CanUse", 3).invoke(pc, canUse, couldUse);
             }
@@ -192,15 +203,18 @@ export class PlayerModule extends BaseModule {
             const usableDistance = this.method<number>("get_UsableDistance").invoke();
             const shipOnlyMask = module.Constants.field<number>("ShipOnlyMask").value;
 
-            canUse.value = num <= usableDistance && !module.PhysicsHelpers_AnythingBetween.invoke(collider, centerVector2, positionVector2, shipOnlyMask, false);
+            canUse.value =
+                num <= usableDistance &&
+                !module.PhysicsHelpers_AnythingBetween.invoke(collider, centerVector2, positionVector2, shipOnlyMask, false);
             couldUse.value = true;
+
             return num;
         };
     }
 
     public updateCameraZoom(): void {
         try {
-            const mainCamera = this.Camera_get_main.invoke();
+            const mainCamera = this.Camera_get_main.invoke() as Il2Cpp.Object;
             if (mainCamera.isNull()) {
                 return;
             }
