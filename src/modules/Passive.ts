@@ -40,21 +40,22 @@ export class PassiveModule extends BaseModule {
     private setupHooks(): void {
         const module = this;
 
-        // Исправленная сигнатура implementation для frida-il2cpp-bridge
+        // Перехват SetKillTimer: подменяем КД на заданное число секунд без ограничений
         this.PlayerControl_SetKillTimer.implementation = function (
             this: Il2Cpp.Class | Il2Cpp.Object | Il2Cpp.ValueType,
             ...parameters: Il2Cpp.Parameter.Type[]
-        ): Il2Cpp.ReturnType {
+        ): any {
             const rawTime = parameters[0] as unknown as number;
             const targetTime = module.useCustomCooldown ? module.customKillCooldown : rawTime;
-            return module.PlayerControl_SetKillTimer.invoke.call(this, targetTime) as Il2Cpp.ReturnType;
+            return module.PlayerControl_SetKillTimer.invoke.call(this, targetTime);
         };
 
+        // Поддержание пассивных свойств в FixedUpdate
         this.PlayerControl_FixedUpdate.implementation = function (
             this: Il2Cpp.Class | Il2Cpp.Object | Il2Cpp.ValueType,
             ...parameters: Il2Cpp.Parameter.Type[]
-        ): Il2Cpp.ReturnType {
-            const result = module.PlayerControl_FixedUpdate.invoke.call(this, ...parameters) as Il2Cpp.ReturnType;
+        ): any {
+            const result = module.PlayerControl_FixedUpdate.invoke.call(this, ...parameters);
 
             if (!module.isWerewolfPassiveEnabled) {
                 return result;
