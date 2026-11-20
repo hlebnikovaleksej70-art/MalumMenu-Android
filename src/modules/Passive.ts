@@ -40,31 +40,39 @@ export class PassiveModule extends BaseModule {
     private setupHooks(): void {
         const module = this;
 
-        // Перехват SetKillTimer: подменяем КД на заданное число секунд без ограничений
-        this.PlayerControl_SetKillTimer.implementation = function (time: number): void {
-            const targetTime = module.useCustomCooldown ? module.customKillCooldown : time;
-            this.method<void>("SetKillTimer", 1).invoke(targetTime);
+        // Исправленная сигнатура implementation для frida-il2cpp-bridge
+        this.PlayerControl_SetKillTimer.implementation = function (
+            this: Il2Cpp.Class | Il2Cpp.Object | Il2Cpp.ValueType,
+            ...parameters: Il2Cpp.Parameter.Type[]
+        ): Il2Cpp.ReturnType {
+            const rawTime = parameters[0] as unknown as number;
+            const targetTime = module.useCustomCooldown ? module.customKillCooldown : rawTime;
+            return module.PlayerControl_SetKillTimer.invoke.call(this, targetTime) as Il2Cpp.ReturnType;
         };
 
-        // Поддержание пассивных свойств в FixedUpdate
-        this.PlayerControl_FixedUpdate.implementation = function (): void {
-            this.method<void>("FixedUpdate").invoke();
+        this.PlayerControl_FixedUpdate.implementation = function (
+            this: Il2Cpp.Class | Il2Cpp.Object | Il2Cpp.ValueType,
+            ...parameters: Il2Cpp.Parameter.Type[]
+        ): Il2Cpp.ReturnType {
+            const result = module.PlayerControl_FixedUpdate.invoke.call(this, ...parameters) as Il2Cpp.ReturnType;
 
-            if (!module.isWerewolfPassiveEnabled) return;
+            if (!module.isWerewolfPassiveEnabled) {
+                return result;
+            }
 
             try {
                 const localPlayerField = module.PlayerControl.tryField<Il2Cpp.Object>("LocalPlayer");
                 const localPlayer = localPlayerField?.value;
 
-                if (!localPlayer || localPlayer.isNull() || !this.handle.equals(localPlayer.handle)) {
-                    return;
+                if (!localPlayer || localPlayer.isNull() || !(this instanceof Il2Cpp.Object) || !this.handle.equals(localPlayer.handle)) {
+                    return result;
                 }
 
                 const data = localPlayer.method<Il2Cpp.Object>("get_Data").invoke();
-                if (!data || data.isNull()) return;
+                if (!data || data.isNull()) return result;
 
                 const role = data.method<Il2Cpp.Object>("get_Role").invoke();
-                if (!role || role.isNull()) return;
+                if (!role || role.isNull()) return result;
 
                 const canVentField = role.tryField<boolean>("CanVent");
                 if (canVentField) {
@@ -73,6 +81,8 @@ export class PassiveModule extends BaseModule {
             } catch {
                 // Игнорируем до появления игрока в матче
             }
+
+            return result;
         };
     }
 
